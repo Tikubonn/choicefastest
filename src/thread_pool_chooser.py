@@ -4,7 +4,7 @@ import queue
 from threading import Thread, Lock
 from closeable import ICloseable, Closeable
 from dataclasses import dataclass
-from typing import NamedTuple, Callable, Self, Any
+from typing import NamedTuple, Callable, Hashable, Self, Any
 
 class Request (NamedTuple):
 
@@ -35,6 +35,24 @@ class Request (NamedTuple):
   @property
   def kwargs_as_dict (self) -> dict[str, Any]:
     return dict(self.kwargs)
+
+  def __hash__ (self) -> float:
+
+    """ハッシュ値を計算します。
+
+    Notes
+    -----
+    ハッシュ値を求められないオブジェクトが args, kwargs に含まれている場合を想定して、
+    それらの値を計算時に None として取り扱うよう暫定的に対処するようにしました。
+    """
+
+    id_, func, args, kwargs = self
+    return hash((
+      id_,
+      func,
+      tuple((a if isinstance(a, Hashable) else None for a in args)),
+      tuple(((k, v if isinstance(v, Hashable) else None) for k, v in kwargs))
+    ))
 
 class _Response (NamedTuple):
 
@@ -240,7 +258,30 @@ class ThreadPoolChooser (ICloseable):
 
   def put (self, func:Callable[[...], Any], args:tuple[Any, ...]=(), kwargs:dict[str, Any]={}, interval:float=0.001) -> int:
 
-    """
+    """空いているワーカースレッドに対して関数の実行を依頼します。
+
+    Notes
+    -----
+    依頼数が exec_thread_count を満たすまでの間、本関数は処理を待機します。
+  
+    Parameters
+    ----------
+    func : Callable[[...], Any]
+      登録される実行関数です。
+    args : tuple[Any, ...]
+      関数実行時に渡される引数の組です。
+      未指定ならば空のタプルが設定されます。
+    kwargs : dict[str, Any]
+      関数実行時に渡されるキーワード引数の集合です。
+      未指定ならば空の辞書が設定されます。
+    interval : float
+      依頼数が exec_thread_count を満たさない間に、再試行までの待機する時間です。
+      未指定ならば 0.001 秒が設定されます。
+
+    Returns
+    -------
+    int 
+      規定数の依頼が完了すると、当該依頼の識別子が返されます。
     """
 
     self.cur_id = (self.cur_id +1) % self.max_id
@@ -260,7 +301,23 @@ class ThreadPoolChooser (ICloseable):
 
   def get (self, id_:int, interval:float=0.001) -> tuple[Any, bool]:
 
-    """
+    """依頼したワーカースレッドから処理結果を取得します。
+
+    Notes
+    -----
+    満足いく処理結果が取得できるまでの間、本関数は処理を待機します。
+
+    Warnings
+    --------
+    引数 id_ に最新の依頼識別子以外の値を与えた場合の動作は未定義です。
+
+    Parameters
+    ----------
+    id_ : int
+      取得する実行結果の識別子です。
+    interval : float
+      依頼数が exec_thread_count を満たさない間に、再試行までの待機する時間です。
+      未指定ならば 0.001 秒が設定されます。
     """
 
     should_sleep = False

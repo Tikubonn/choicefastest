@@ -1,12 +1,12 @@
 
 import time
 import pytest
-from thread_pool_chooser import CatchedErrors, WorkerThread
+from thread_pool_chooser import CatchedErrors, _WorkerThread
 
 @pytest.fixture
-def test_worker_thread_ () -> "typing.Generator[thread_pool_chooser.WorkerThread, None, None]":
+def test_worker_thread_ () -> "typing.Generator[thread_pool_chooser._WorkerThread, None, None]":
   catched_errors = CatchedErrors()
-  worker_thread = WorkerThread(catched_errors)
+  worker_thread = _WorkerThread(catched_errors)
   yield worker_thread
   assert worker_thread.closed == False
   worker_thread.close()
@@ -14,7 +14,7 @@ def test_worker_thread_ () -> "typing.Generator[thread_pool_chooser.WorkerThread
 
 WAIT_SECONDS:int = 2
 
-def test_worker_thread (test_worker_thread_:WorkerThread):
+def test_worker_thread (test_worker_thread_:_WorkerThread):
 
   #関数の実行結果を取得する動作確認です
 
@@ -33,7 +33,7 @@ def test_worker_thread (test_worker_thread_:WorkerThread):
     True,
   )
 
-def test_worker_thread_error (test_worker_thread_:WorkerThread):
+def test_worker_thread_error (test_worker_thread_:_WorkerThread):
 
   #例外が発生した場合の動作確認です
 
@@ -47,7 +47,7 @@ def test_worker_thread_error (test_worker_thread_:WorkerThread):
   assert test_worker_thread_.get(1) == (None, False, True) #(None, 実行結果は失敗, 実行自体は完了) という意味になります
   assert 0 < len(test_worker_thread_.catched_errors.inner_dict) #例外が捕捉された場合、内部の .cactched_errors に当該例外が記録されます
 
-def test_worker_thread_not_found (test_worker_thread_:WorkerThread):
+def test_worker_thread_not_found (test_worker_thread_:_WorkerThread):
 
   #未実行の関数の結果を取得しようとした場合の動作確認です
 
