@@ -1,0 +1,48 @@
+
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thread-pool-chooser"
+version = "0.1.0"
+dependencies = [
+  "closeable@git+https://github.com/tikubonn/closeable.git"
+]
+requires-python = ">=3.12"
+authors = [
+  {name = "tikubonn"}
+]
+maintainers = [
+  {name = "tikubonn"}
+]
+description = "It provides the functionality to execute functions with different processing times in parallel in multiple threads and obtain the result of the fastest execution."
+readme = "README.md"
+license = "AGPL-3.0"
+license-files = ["LICEN[CS]E"]
+keywords = []
+classifiers = [
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.12",
+  "Development Status :: 5 - Production/Stable"
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest"
+]
+
+[project.urls]
+Homepage = "https://github.com/tikubonn/thread-pool-chooser"
+Documentation = "https://github.com/tikubonn/thread-pool-chooser/README.md"
+Repository = "https://github.com/tikubonn/thread-pool-chooser.git"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-v"
+testpaths = [
+  "test"
+]

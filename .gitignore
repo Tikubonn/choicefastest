@@ -1,0 +1,4 @@
+.pytest_cache
+src/thread_pool_chooser.egg-info
+build
+NOTE.txt
