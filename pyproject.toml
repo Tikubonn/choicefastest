@@ -46,3 +46,4 @@ addopts = "-v"
 testpaths = [
   "test"
 ]
+log_cli_level = "DEBUG"

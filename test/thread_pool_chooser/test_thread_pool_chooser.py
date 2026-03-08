@@ -2,7 +2,7 @@
 import time
 import pytest
 import random
-from thread_pool_chooser import ThreadPoolChooser, Request
+from thread_pool_chooser import ThreadPoolChooser, _RequestAsKey
 from threading import Lock
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def test_thread_pool_chooser_error (test_chooser:ThreadPoolChooser):
   assert test_chooser.get(id_) == (None, False)
   test_chooser.close()
   assert test_chooser.exceptions() == {
-    Request(id_, sample_func, (), ()): [exception, exception, exception]
+    _RequestAsKey(id_, sample_func, (), ()): [exception, exception, exception]
   }
 
 def test_thread_pool_chooser_error2 (test_chooser:ThreadPoolChooser):
@@ -81,7 +81,7 @@ def test_thread_pool_chooser_error2 (test_chooser:ThreadPoolChooser):
   assert test_chooser.get(id_) == (123, True)
   test_chooser.close()
   assert test_chooser.exceptions() == {
-    Request(id_, sample_func, (), ()): [exception]
+    _RequestAsKey(id_, sample_func, (), ()): [exception]
   }
 
 def test_thread_pool_chooser_put (test_chooser:ThreadPoolChooser):

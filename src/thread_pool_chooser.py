@@ -2,6 +2,7 @@
 import time
 import queue
 import logging
+import traceback
 from threading import Thread, Lock
 from closeable import ICloseable, Closeable
 from dataclasses import dataclass
@@ -25,36 +26,36 @@ class Request (NamedTuple):
     実行される関数オブジェクトです。
   args : tuple[Any, ...]
     実行される関数に渡される引数です。
-  kwargs : tuple[tuple[str, Any], ...]
+  kwargs : dict[str, Any]
     実行される関数に渡されるキーワード引数です。
   """
 
   id_:int
   func:Callable[[...], Any]
   args:tuple[Any, ...]
-  # kwargs:dict[str, Any]
-  kwargs:tuple[tuple[str, Any], ...] #have to be hashable.
+  kwargs:dict[str, Any]
 
-  @property
-  def kwargs_as_dict (self) -> dict[str, Any]:
-    return dict(self.kwargs)
+  def as_key (self) -> "thread_pool_chooser._RequestAsKey":
+    return _RequestAsKey(
+      self.id_,
+      self.func,
+      self.args,
+      tuple(sorted(((k, v) for k, v in self.kwargs.items())))
+    )
+
+class _RequestAsKey (NamedTuple):
+
+  id_:int
+  func:Callable[[...], Any]
+  args:tuple[Any, ...]
+  kwargs:tuple[tuple[str, Any], ...]
 
   def __hash__ (self) -> float:
-
-    """ハッシュ値を計算します。
-
-    Notes
-    -----
-    ハッシュ値を求められないオブジェクトが args, kwargs に含まれている場合を想定して、
-    それらの値を計算時に None として取り扱うよう暫定的に対処するようにしました。
-    """
-
-    id_, func, args, kwargs = self
     return hash((
-      id_,
-      func,
-      tuple((a if isinstance(a, Hashable) else None for a in args)),
-      tuple(((k, v if isinstance(v, Hashable) else None) for k, v in kwargs))
+      self.id_,
+      self.func if isinstance(self.func, Hashable) else None,
+      tuple((a if isinstance(a, Hashable) else None for a in self.args)),
+      tuple(((k, v if isinstance(v, Hashable) else None) for k, v in self.kwargs))
     ))
 
 class _Response (NamedTuple):
@@ -85,16 +86,17 @@ class CatchedErrors:
     """
 
     with self.lock:
-      self.inner_dict.setdefault(request, [])
-      self.inner_dict[request].append(exception)
+      request_as_key = request.as_key()
+      self.inner_dict.setdefault(request_as_key, [])
+      self.inner_dict[request_as_key].append(exception)
 
-  def as_dict (self) -> dict[Request, list[Exception]]:
+  def as_dict (self) -> dict[_RequestAsKey, list[Exception]]:
 
     """これまでに記録された例外情報を辞書形式で返します。
 
     Returns
     -------
-    dict[Request, list[Exception]]
+    dict[_RequestAsKey, list[Exception]]
       これまでに記録された例外の記録です。
     """
 
@@ -118,7 +120,7 @@ class _WorkerThread (ICloseable):
         request = self.cur_request
         try:
           try:
-            result = request.func(*request.args, **request.kwargs_as_dict)
+            result = request.func(*request.args, **request.kwargs)
             response = _Response(request.id_, result, True)
             self.result_queue.put(response)
 
@@ -129,6 +131,7 @@ class _WorkerThread (ICloseable):
             self.result_queue.put(response)
             self.catched_errors.add(request, exception)
 
+            traceback.print_exc() #log.
             _LOGGER.debug("Request failed: {!r} -> {!r}".format(self.cur_request, exception)) #log.
 
         finally:
@@ -189,8 +192,7 @@ class _WorkerThread (ICloseable):
     """
 
     if not self.cur_request:
-      kwargs_tuple = tuple(sorted((k, v) for k, v in kwargs.items()))
-      request = Request(id_, func, args, kwargs_tuple)
+      request = Request(id_, func, args, kwargs)
       self.cur_request = request
       return True
     else:
