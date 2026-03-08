@@ -1,10 +1,13 @@
 
 import time
 import queue
+import logging
 from threading import Thread, Lock
 from closeable import ICloseable, Closeable
 from dataclasses import dataclass
 from typing import NamedTuple, Callable, Hashable, Self, Any
+
+_LOGGER:logging.Logger = logging.getLogger(__name__)
 
 class Request (NamedTuple):
 
@@ -107,6 +110,8 @@ class _WorkerThread (ICloseable):
     self.should_loop = False
     self.thread.join()
 
+    _LOGGER.debug("Closed object: {!r}".format(self)) #log.
+
   def _thread_main (self):
     while self.should_loop:
       if self.cur_request:
@@ -116,10 +121,16 @@ class _WorkerThread (ICloseable):
             result = request.func(*request.args, **request.kwargs_as_dict)
             response = _Response(request.id_, result, True)
             self.result_queue.put(response)
+
+            _LOGGER.debug("Request succeed: {!r} -> {!r}".format(self.cur_request, result)) #log.
+
           except Exception as exception:
             response = _Response(request.id_, None, False)
             self.result_queue.put(response)
             self.catched_errors.add(request, exception)
+
+            _LOGGER.debug("Request failed: {!r} -> {!r}".format(self.cur_request, exception)) #log.
+
         finally:
           self.cur_request = None
 
@@ -216,6 +227,8 @@ class ThreadPoolChooser (ICloseable):
   def _on_close (self):
     for thread in self.worker_threads:
       thread.close()
+
+    _LOGGER.debug("Closed object: {!r}".format(self)) #log.
 
   def __init__ (self, exec_thread_count:int, max_thread_count:int=0, max_id:int=65536):
 
