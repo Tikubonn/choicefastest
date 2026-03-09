@@ -124,12 +124,12 @@ class _WorkerFutures:
 
   def exec (self, requests:list[Request], interval:float=0.001) -> tuple[Any, bool]:
 
-    """...
+    """指定関数群を実行し、最も早く得られた実行結果を取得します。
 
     Parameters
     ----------
     requests : list[Request]
-      ...
+      並行処理する実行関数の依頼リストです。
     interval : float
       実行結果が得られなかった場合に待機する時間です。
       未指定ならば 0.001 秒が設定されます。
@@ -172,7 +172,8 @@ class ChoiceFastest (ICloseable):
     Parameters
     ----------
     max_workers : int|None
-      ...
+      最大同時実行可能なスレッド数です。
+      未指定ならば concurrent.futures.ThreadPoolWorker のデフォルト挙動に従います。
     """
 
     self.catched_errors = _CatchedErrors()
@@ -194,12 +195,12 @@ class ChoiceFastest (ICloseable):
 
   def exec (self, requests:list[Request], interval:float=0.001) -> tuple[Any, bool]:
 
-    """...
+    """指定関数群を実行し、最も早く得られた実行結果を取得します。
 
     Parameters
     ----------
     requests : list[Request]
-      ...
+      並行処理する実行関数の依頼リストです。
     interval : float
       実行結果が得られなかった場合に待機する時間です。
       未指定ならば 0.001 秒が設定されます。
