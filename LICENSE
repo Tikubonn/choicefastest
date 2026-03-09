@@ -629,7 +629,7 @@ to attach them to the start of each source file to most effectively
 state the exclusion of warranty; and each file should have at least
 the "copyright" line and a pointer to where the full notice is found.
 
-    choicefastest, It provides the functionality to execute functions with different processing times in parallel in multiple threads and obtain the result of the fastest execution.
+    choicefastest, It provides the ability to perform multiple parallel processes and obtain the fastest results.
     Copyright (C) 2026  tikubonn
 
     This program is free software: you can redistribute it and/or modify

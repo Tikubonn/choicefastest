@@ -16,7 +16,7 @@ authors = [
 maintainers = [
   {name = "tikubonn"}
 ]
-description = "It provides the functionality to execute functions with different processing times in parallel in multiple threads and obtain the result of the fastest execution."
+description = "It provides the ability to perform multiple parallel processes and obtain the fastest results."
 readme = "README.md"
 license = "AGPL-3.0"
 license-files = ["LICEN[CS]E"]

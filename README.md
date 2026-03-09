@@ -6,7 +6,7 @@
 ![](https://img.shields.io/badge/Python-3.12-blue)
 ![](https://img.shields.io/badge/License-AGPLv3-blue)
 
-実行毎に処理時間が異なる関数を、複数スレッドで並行実行し、最も早く終了した結果を取得する機能を提供します。
+複数の並行処理を行い、その中から最速の結果を取得する機能を提供します。
 
 ```py
 import time
@@ -21,6 +21,7 @@ def sample_func ():
 with ChoiceFastest(3) as chooser:
   result, succeed = chooser.exec(sample_func)
   print(result, succeed) #0 ~ 5 の範囲内の最小値, True
+print(chooser.exceptions()) #{}
 ```
 
 ## Install
