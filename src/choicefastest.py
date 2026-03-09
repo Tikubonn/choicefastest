@@ -5,18 +5,17 @@ import logging
 import traceback
 from threading import Thread, Lock
 from closeable import ICloseable, Closeable
-from dataclasses import dataclass
 from typing import NamedTuple, Callable, Hashable, Self, Any
 
 _LOGGER:logging.Logger = logging.getLogger(__name__)
 
-class Request (NamedTuple):
+class _Request (NamedTuple):
 
   """ワーカースレッドに依頼する実行関数の情報がまとめられた名前付きタプルです。
 
   Notes
   -----
-  本インスタンスは CatchedErrors オブジェクトのキーオブジェクトとしても使用されます。
+  本インスタンスは _CatchedErrors オブジェクトのキーオブジェクトとしても使用されます。
 
   Attributes
   ----------
@@ -64,7 +63,7 @@ class _Response (NamedTuple):
   result:Any
   succeed:bool
 
-class CatchedErrors:
+class _CatchedErrors:
 
   """ワーカースレッドで送出された例外を記録する機能を提供します。
   """
@@ -73,14 +72,14 @@ class CatchedErrors:
     self.inner_dict = {}
     self.lock = Lock()
 
-  def add (self, request:Request, exception:Exception):
+  def add (self, request:_Request, exception:Exception):
 
     """ワーカースレッドで送出された例外を記録します。
 
     Parameters
     ----------
-    request : Request
-      例外の発生源を識別するために利用される Request オブジェクトです。
+    request : _Request
+      例外の発生源を識別するために利用される _Request オブジェクトです。
     exception : Exception
       実際に送出された例外オブジェクトです。
     """
@@ -141,14 +140,14 @@ class _WorkerThread (ICloseable):
     self.thread = Thread(target=self._thread_main)
     self.thread.start()
 
-  def __init__ (self, catched_errors:CatchedErrors):
+  def __init__ (self, catched_errors:_CatchedErrors):
 
     """インスタンスの初期化を行います。
 
     Parameters
     ----------
-    catched_errors : CatchedErrors
-      例外発生時にその記録を行う CatchedErrors オブジェクトです。
+    catched_errors : _CatchedErrors
+      例外発生時にその記録を行う _CatchedErrors オブジェクトです。
     """
 
     self.catched_errors = catched_errors
@@ -192,7 +191,7 @@ class _WorkerThread (ICloseable):
     """
 
     if not self.cur_request:
-      request = Request(id_, func, args, kwargs)
+      request = _Request(id_, func, args, kwargs)
       self.cur_request = request
       return True
     else:
@@ -252,7 +251,7 @@ class ChoiceFastest (ICloseable):
     self.max_thread_count = max(max_thread_count, exec_thread_count * 2)
     self.max_id = max(max_id, 1)
     self.cur_id = 0
-    self.catched_errors = CatchedErrors()
+    self.catched_errors = _CatchedErrors()
     self.worker_threads = [
       _WorkerThread(self.catched_errors) for _ in range(self.max_thread_count)
     ]
@@ -351,7 +350,7 @@ class ChoiceFastest (ICloseable):
     else:
       return None, False
 
-  def exceptions (self) -> dict[Request, Exception]:
+  def exceptions (self) -> dict[_RequestAsKey, Exception]:
 
     """その時点までに記録された例外情報を辞書形式で返します。
 
@@ -362,7 +361,7 @@ class ChoiceFastest (ICloseable):
 
     Returns
     -------
-    dict[Request, list[Exception]]
+    dict[_RequestAsKey, list[Exception]]
       これまでに記録された例外の記録です。
     """
 

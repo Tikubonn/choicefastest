@@ -1,9 +1,9 @@
 
 import pytest
-from choicefastest import Request, _RequestAsKey
+from choicefastest import _Request, _RequestAsKey
 
 def test_request_kwargs_as_key ():
-  request = Request(
+  request = _Request(
     id_=1,
     func=lambda *args, **kwargs: print(*args, **kwargs),
     args=(1, 2, 3),
