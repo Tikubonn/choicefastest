@@ -1,6 +1,6 @@
 
 import pytest
-from thread_pool_chooser import CatchedErrors, Request
+from choicefastest import CatchedErrors, Request
 
 def test_catched_errors ():
   catched_errors = CatchedErrors()

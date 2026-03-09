@@ -2,18 +2,18 @@
 import time
 import pytest
 import random
-from thread_pool_chooser import ThreadPoolChooser, _RequestAsKey
+from choicefastest import ChoiceFastest, _RequestAsKey
 from threading import Lock
 
 @pytest.fixture
 def test_chooser ():
-  chooser = ThreadPoolChooser(3)
+  chooser = ChoiceFastest(3)
   assert chooser.closed == False
   yield chooser
   chooser.close()
   assert chooser.closed == True
 
-def test_thread_pool_chooser (test_chooser:ThreadPoolChooser):
+def test_choice_fastest (test_chooser:ChoiceFastest):
 
   #基本的な操作に対する動作確認を行います
 
@@ -39,7 +39,7 @@ def test_thread_pool_chooser (test_chooser:ThreadPoolChooser):
   test_chooser.close()
   assert test_chooser.exceptions() == {}
 
-def test_thread_pool_chooser_error (test_chooser:ThreadPoolChooser):
+def test_choice_fastest_error (test_chooser:ChoiceFastest):
   
   #関数が例外を送出した場合の動作確認です
 
@@ -57,7 +57,7 @@ def test_thread_pool_chooser_error (test_chooser:ThreadPoolChooser):
     _RequestAsKey(id_, sample_func, (), ()): [exception, exception, exception]
   }
 
-def test_thread_pool_chooser_error2 (test_chooser:ThreadPoolChooser):
+def test_choice_fastest_error2 (test_chooser:ChoiceFastest):
 
   #一部スレッドのみが例外を送出した場合の動作確認です
 
@@ -84,7 +84,7 @@ def test_thread_pool_chooser_error2 (test_chooser:ThreadPoolChooser):
     _RequestAsKey(id_, sample_func, (), ()): [exception]
   }
 
-def test_thread_pool_chooser_put (test_chooser:ThreadPoolChooser):
+def test_choice_fastest_put (test_chooser:ChoiceFastest):
 
   #.put の返り値がほぼ一意であることを検証します
 

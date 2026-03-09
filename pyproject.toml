@@ -4,7 +4,7 @@ requires = ["setuptools >= 77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "thread-pool-chooser"
+name = "choicefastest"
 version = "1.1.0"
 dependencies = [
   "closeable@git+https://github.com/tikubonn/closeable.git"
@@ -33,9 +33,9 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/tikubonn/thread-pool-chooser"
-Documentation = "https://github.com/tikubonn/thread-pool-chooser/README.md"
-Repository = "https://github.com/tikubonn/thread-pool-chooser.git"
+Homepage = "https://github.com/tikubonn/choicefastest"
+Documentation = "https://github.com/tikubonn/choicefastest/README.md"
+Repository = "https://github.com/tikubonn/choicefastest.git"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

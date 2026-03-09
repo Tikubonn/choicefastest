@@ -1,0 +1,9 @@
+LICENSE
+README.md
+pyproject.toml
+src/choicefastest.py
+src/choicefastest.egg-info/PKG-INFO
+src/choicefastest.egg-info/SOURCES.txt
+src/choicefastest.egg-info/dependency_links.txt
+src/choicefastest.egg-info/requires.txt
+src/choicefastest.egg-info/top_level.txt

@@ -1,6 +1,6 @@
 
 import pytest
-from thread_pool_chooser import Request, _RequestAsKey
+from choicefastest import Request, _RequestAsKey
 
 def test_request_kwargs_as_key ():
   request = Request(

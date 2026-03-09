@@ -221,7 +221,7 @@ class _WorkerThread (ICloseable):
       except queue.Empty:
         return (None, False, False)
 
-class ThreadPoolChooser (ICloseable):
+class ChoiceFastest (ICloseable):
 
   """実行毎に処理時間が異なる関数を、複数スレッドで並行実行し、最も早く終了した結果を取得する機能を提供します。
   """

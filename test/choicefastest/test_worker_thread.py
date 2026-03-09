@@ -1,10 +1,10 @@
 
 import time
 import pytest
-from thread_pool_chooser import CatchedErrors, _WorkerThread
+from choicefastest import CatchedErrors, _WorkerThread
 
 @pytest.fixture
-def test_worker_thread_ () -> "typing.Generator[thread_pool_chooser._WorkerThread, None, None]":
+def test_worker_thread_ () -> "typing.Generator[choicefastest._WorkerThread, None, None]":
   catched_errors = CatchedErrors()
   worker_thread = _WorkerThread(catched_errors)
   yield worker_thread

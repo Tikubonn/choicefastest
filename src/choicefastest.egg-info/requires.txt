@@ -1,0 +1,4 @@
+closeable @ git+https://github.com/tikubonn/closeable.git
+
+[test]
+pytest
