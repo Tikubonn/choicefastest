@@ -3,13 +3,14 @@ import time
 import queue
 import logging
 import traceback
+from typing import NamedTuple, Callable, Hashable, Self, Any
 from threading import Thread, Lock
 from closeable import ICloseable, Closeable
-from typing import NamedTuple, Callable, Hashable, Self, Any
+from concurrent.futures import ThreadPoolExecutor
 
 _LOGGER:logging.Logger = logging.getLogger(__name__)
 
-class _Request (NamedTuple):
+class Request (NamedTuple):
 
   """ワーカースレッドに依頼する実行関数の情報がまとめられた名前付きタプルです。
 
@@ -19,8 +20,6 @@ class _Request (NamedTuple):
 
   Attributes
   ----------
-  id_ : int
-    ある一定期間内での一意性が確保されている識別子です。
   func : Callable[[...], Any]
     実行される関数オブジェクトです。
   args : tuple[Any, ...]
@@ -29,14 +28,12 @@ class _Request (NamedTuple):
     実行される関数に渡されるキーワード引数です。
   """
 
-  id_:int
   func:Callable[[...], Any]
-  args:tuple[Any, ...]
-  kwargs:dict[str, Any]
+  args:tuple[Any, ...]=()
+  kwargs:dict[str, Any]={}
 
   def as_key (self) -> "thread_pool_chooser._RequestAsKey":
     return _RequestAsKey(
-      self.id_,
       self.func,
       self.args,
       tuple(sorted(((k, v) for k, v in self.kwargs.items())))
@@ -44,14 +41,12 @@ class _Request (NamedTuple):
 
 class _RequestAsKey (NamedTuple):
 
-  id_:int
   func:Callable[[...], Any]
   args:tuple[Any, ...]
   kwargs:tuple[tuple[str, Any], ...]
 
   def __hash__ (self) -> float:
     return hash((
-      self.id_,
       self.func if isinstance(self.func, Hashable) else None,
       tuple((a if isinstance(a, Hashable) else None for a in self.args)),
       tuple(((k, v if isinstance(v, Hashable) else None) for k, v in self.kwargs))
@@ -59,7 +54,6 @@ class _RequestAsKey (NamedTuple):
 
 class _Response (NamedTuple):
 
-  id_:int
   result:Any
   succeed:bool
 
@@ -72,14 +66,14 @@ class _CatchedErrors:
     self.inner_dict = {}
     self.lock = Lock()
 
-  def add (self, request:_Request, exception:Exception):
+  def add (self, request:Request, exception:Exception):
 
     """ワーカースレッドで送出された例外を記録します。
 
     Parameters
     ----------
-    request : _Request
-      例外の発生源を識別するために利用される _Request オブジェクトです。
+    request : Request
+      例外の発生源を識別するために利用される Request オブジェクトです。
     exception : Exception
       実際に送出された例外オブジェクトです。
     """
@@ -102,123 +96,64 @@ class _CatchedErrors:
     with self.lock:
       return self.inner_dict.copy()
 
-class _WorkerThread (ICloseable):
+class _WorkerFutures:
 
   """依頼された関数を実行するワーカースレッドの機能を提供します。
   """
 
-  def _on_close (self):
-    self.should_loop = False
-    self.thread.join()
-
-    _LOGGER.debug("Closed object: {!r}".format(self)) #log.
-
-  def _thread_main (self):
-    while self.should_loop:
-      if self.cur_request:
-        request = self.cur_request
-        try:
-          try:
-            result = request.func(*request.args, **request.kwargs)
-            response = _Response(request.id_, result, True)
-            self.result_queue.put(response)
-
-            _LOGGER.debug("Request succeed: {!r} -> {!r}".format(self.cur_request, result)) #log.
-
-          except Exception as exception:
-            response = _Response(request.id_, None, False)
-            self.result_queue.put(response)
-            self.catched_errors.add(request, exception)
-
-            traceback.print_exc() #log.
-            _LOGGER.debug("Request failed: {!r} -> {!r}".format(self.cur_request, exception)) #log.
-
-        finally:
-          self.cur_request = None
-
-  def _thread_setup (self):
-    self.thread = Thread(target=self._thread_main)
-    self.thread.start()
-
-  def __init__ (self, catched_errors:_CatchedErrors):
-
-    """インスタンスの初期化を行います。
-
-    Parameters
-    ----------
-    catched_errors : _CatchedErrors
-      例外発生時にその記録を行う _CatchedErrors オブジェクトです。
-    """
-
+  def __init__ (self, catched_errors:_CatchedErrors, executor:ThreadPoolExecutor):
     self.catched_errors = catched_errors
-    self.should_loop = True
-    self.cur_request = None
-    self.result_queue = queue.Queue()
-    self.error_queue = queue.Queue()
-    self.thread = None
-    self.closeable = Closeable(self._on_close)
-    self._thread_setup()
+    self.executor = executor
+    self.response_queue = queue.Queue()
 
-  @property
-  def closed (self) -> bool:
-    return self.closeable.closed
+  def _worker_main (self, request:Request):
+    try:
+      result = request.func(*request.args, **request.kwargs)
+      response = _Response(result, True)
+      self.response_queue.put(response)
 
-  def close (self):
-    self.closeable.close()
+      _LOGGER.debug("Request succeed: {!r} -> {!r}".format(request, result)) #log.
 
-  def put (self, id_:int, func:Callable[[...], Any], args:tuple[Any, ...]=(), kwargs:dict[str, Any]={}) -> bool:
+    except Exception as exception:
+      response = _Response(None, False)
+      self.response_queue.put(response)
+      self.catched_errors.add(request, exception)
 
-    """ワーカースレッドに実行させる関数を登録します。
+      traceback.print_exc() #log.
+      _LOGGER.debug("Request failed: {!r} -> {!r}".format(request, exception)) #log.
 
-    Parameters
-    ----------
-    id_ : int
-      実行依頼の識別子です。
-    func : Callable[[...], Any]
-      登録される実行関数です。
-    args : tuple[Any, ...]
-      関数実行時に渡される引数の組です。
-      未指定ならば空のタプルが設定されます。
-    kwargs : dict[str, Any]
-      関数実行時に渡されるキーワード引数の集合です。
-      未指定ならば空の辞書が設定されます。
+  def exec (self, requests:list[Request], interval:float=0.001) -> tuple[Any, bool]:
 
-    Returns
-    -------
-    bool
-      遂行中の依頼がない状態ならば、実行関数の情報を登録し True を返します。
-      逆に遂行中の依頼があるならば本メソッドは即座に False を返します。
-    """
-
-    if not self.cur_request:
-      request = _Request(id_, func, args, kwargs)
-      self.cur_request = request
-      return True
-    else:
-      return False
-
-  def get (self, id_:int) -> tuple[Any, bool, bool]:
-
-    """ワーカースレッドが遂行した関数の実行結果を取得します。
+    """...
 
     Parameters
     ----------
-    id_ : int
-      取得する実行結果の識別子です。
+    requests : list[Request]
+      ...
+    interval : float
+      実行結果が得られなかった場合に待機する時間です。
+      未指定ならば 0.001 秒が設定されます。
 
     Returns
     -------
-    tuple[Any, bool, bool]
-      左から関数の実行結果・処理が無事に完了したかを表す真偽値・結果自体が存在するかを表す真偽値、となります。
+    tuple[Any, bool]
+      左から関数の実行結果・実行結果が存在するかを表す真偽値となります。
     """
 
-    while True:
+    for request in requests:
+      self.executor.submit(self._worker_main, request)
+    response_count = 0
+    while response_count < len(requests):
       try:
-        response = self.result_queue.get(timeout=0.0)
-        if response.id_ == id_:
-          return response.result, response.succeed, True
+        response = self.response_queue.get(timeout=interval)
+        if response.succeed:
+          return response.result, True
+        else:
+          response_count += 1
       except queue.Empty:
-        return (None, False, False)
+        pass
+    else:
+      return None, False
 
 class ChoiceFastest (ICloseable):
 
@@ -226,35 +161,22 @@ class ChoiceFastest (ICloseable):
   """
 
   def _on_close (self):
-    for thread in self.worker_threads:
-      thread.close()
+    self.executor.shutdown()
 
     _LOGGER.debug("Closed object: {!r}".format(self)) #log.
 
-  def __init__ (self, exec_thread_count:int, max_thread_count:int=0, max_id:int=65536):
+  def __init__ (self, max_workers:int|None=None):
 
     """インスタンスの初期化を行います。
 
     Parameters
     ----------
-    exec_thread_count : int
-      依頼時に一度に並行処理される数です。
-    max_thread_count : int
-      待機状態を含めたワーカースレッドの数です。
-      未指定ならば 0 が設定されます。
-    max_id : int
-      動的に割り当てられる依頼識別子の最大値です。
-      未指定ならば 65536 が設定されます。
+    max_workers : int|None
+      ...
     """
 
-    self.exec_thread_count = exec_thread_count
-    self.max_thread_count = max(max_thread_count, exec_thread_count * 2)
-    self.max_id = max(max_id, 1)
-    self.cur_id = 0
     self.catched_errors = _CatchedErrors()
-    self.worker_threads = [
-      _WorkerThread(self.catched_errors) for _ in range(self.max_thread_count)
-    ]
+    self.executor = ThreadPoolExecutor(max_workers)
     self.closeable = Closeable(self._on_close)
 
   @property
@@ -270,85 +192,26 @@ class ChoiceFastest (ICloseable):
   def __exit__ (self, error_type, error_value, traceback):
     self.close()
 
-  def put (self, func:Callable[[...], Any], args:tuple[Any, ...]=(), kwargs:dict[str, Any]={}, interval:float=0.001) -> int:
+  def exec (self, requests:list[Request], interval:float=0.001) -> tuple[Any, bool]:
 
-    """空いているワーカースレッドに対して関数の実行を依頼します。
+    """...
 
-    Notes
-    -----
-    依頼数が exec_thread_count を満たすまでの間、本関数は処理を待機します。
-  
     Parameters
     ----------
-    func : Callable[[...], Any]
-      登録される実行関数です。
-    args : tuple[Any, ...]
-      関数実行時に渡される引数の組です。
-      未指定ならば空のタプルが設定されます。
-    kwargs : dict[str, Any]
-      関数実行時に渡されるキーワード引数の集合です。
-      未指定ならば空の辞書が設定されます。
+    requests : list[Request]
+      ...
     interval : float
-      依頼数が exec_thread_count を満たさない間に、再試行までの待機する時間です。
+      実行結果が得られなかった場合に待機する時間です。
       未指定ならば 0.001 秒が設定されます。
 
     Returns
     -------
-    int 
-      規定数の依頼が完了すると、当該依頼の識別子が返されます。
+    tuple[Any, bool]
+      左から関数の実行結果・実行結果が存在するかを表す真偽値となります。
     """
 
-    self.cur_id = (self.cur_id +1) % self.max_id
-    should_sleep = False
-    put_succeed_count = 0
-    while put_succeed_count < self.exec_thread_count:
-      if should_sleep:
-        time.sleep(interval)
-      else:
-        should_sleep = True
-      for thread in self.worker_threads:
-        if put_succeed_count < self.exec_thread_count:
-          put_succeed = thread.put(self.cur_id, func, args, kwargs)
-          if put_succeed:
-            put_succeed_count += 1
-    return self.cur_id
-
-  def get (self, id_:int, interval:float=0.001) -> tuple[Any, bool]:
-
-    """依頼したワーカースレッドから処理結果を取得します。
-
-    Notes
-    -----
-    満足いく処理結果が取得できるまでの間、本関数は処理を待機します。
-
-    Warnings
-    --------
-    引数 id_ に最新の依頼識別子以外の値を与えた場合の動作は未定義です。
-
-    Parameters
-    ----------
-    id_ : int
-      取得する実行結果の識別子です。
-    interval : float
-      依頼数が exec_thread_count を満たさない間に、再試行までの待機する時間です。
-      未指定ならば 0.001 秒が設定されます。
-    """
-
-    should_sleep = False
-    found_count = 0
-    while found_count < self.exec_thread_count:
-      if should_sleep:
-        time.sleep(interval)
-      else:
-        should_sleep = True
-      for thread in self.worker_threads:
-        result, succeed, found = thread.get(id_)
-        if found:
-          found_count += 1
-          if succeed:
-            return result, True
-    else:
-      return None, False
+    worker_futures = _WorkerFutures(self.catched_errors, self.executor)
+    return worker_futures.exec(requests, interval)
 
   def exceptions (self) -> dict[_RequestAsKey, Exception]:
 

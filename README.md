@@ -11,16 +11,15 @@
 ```py
 import time
 import random
-from choicefastest import ThreadPoolChooser
+from choicefastest import ChoiceFastest
 
 def sample_func ():
   sleep_seconds = random.randint(0, 5)
   time.sleep(sleep_seconds)
   return sleep_seconds
 
-with ThreadPoolChooser(3) as chooser:
-  id_ = chooser.put(sample_func)
-  result, succeed = chooser.get(id_)
+with ChoiceFastest(3) as chooser:
+  result, succeed = chooser.exec(sample_func)
   print(result, succeed) #0 ~ 5 の範囲内の最小値, True
 ```
 

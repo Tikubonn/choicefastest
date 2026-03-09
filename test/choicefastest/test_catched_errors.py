@@ -1,11 +1,10 @@
 
 import pytest
-from choicefastest import _CatchedErrors, _Request
+from choicefastest import _CatchedErrors, Request
 
 def test_catched_errors ():
   catched_errors = _CatchedErrors()
-  request = _Request(
-    id_=1,
+  request = Request(
     func=lambda *args, **kwargs: print(*args, **kwargs),
     args=(1, 2, 3),
     kwargs={"a": 1, "b": 2, "c": 3}
